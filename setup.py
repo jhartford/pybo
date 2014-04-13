@@ -10,14 +10,19 @@ def setup_package(parent_package='', top_path=None):
     import os, subprocess
 
     class SimpleExtension(Extension):
-        def __init__(self, source):
-            name, ext = os.path.splitext(source)
-            if ext == '.pyx':
-                subprocess.call(['cython', source])
-                sources = [name + '.c']
-            else:
-                sources = [source]
+        def __init__(self, *sources):
+            psources = []
+            for source in sources:
+                name, ext = os.path.splitext(source)
+                if ext == '.pyx':
+                    subprocess.call(['cython', source])
+                    psources.append(name + '.c')
+                else:
+                    psources.append(source)
+
+            name, ext = os.path.splitext(psources[0])
             name = name.replace(os.path.sep, '.')
+
             Extension.__init__(self, name, sources=sources)
 
     setup(
@@ -29,6 +34,8 @@ def setup_package(parent_package='', top_path=None):
         zip_safe=False,
         ext_modules=[
             SimpleExtension('pybo/policies/gpopt/_direct.pyx'),
+            SimpleExtension('pybo/policies/gpopt/_escov.pyx',
+                            'pybo/policies/gpopt/_escovraw.c'),
         ])
 
 

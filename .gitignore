@@ -1,3 +1,4 @@
 /build/
-*.c
+/pybo/policies/gpopt/_direct.c
+/pybo/policies/gpopt/_escov.c
 *.so
