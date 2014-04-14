@@ -1,5 +1,5 @@
 """
-Implementation of the Probability of Improvement strategy.
+Wrapper around the covariance computation code for ES/EP.
 """
 
 # future imports
