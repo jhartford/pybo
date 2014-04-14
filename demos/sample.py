@@ -4,6 +4,7 @@ import matplotlib.pyplot as pl
 import pygp
 import pybo.models
 import pybo.utils.ldsample as ldsample
+import pybo.policies.gpopt.gpentropy as gpentropy
 
 
 if __name__ == '__main__':
@@ -22,10 +23,15 @@ if __name__ == '__main__':
     y = model.get_all(X)
     gp.add_data(X, y)
 
+    xstar = np.array([2.])
+    ell = np.array([ell])
+
     # get some points for plotting.
     xmin = model.bounds[0,0]
     xmax = model.bounds[0,1]
     x = np.linspace(xmin, xmax, 200)
+
+    gpentropy.run(X, y, xstar, ell, sf**2, sn**2)
 
     pl.gcf()
     pl.cla()

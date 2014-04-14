@@ -15,6 +15,7 @@ pybo.policies.gpopt.gpei
 pybo.policies.gpopt.gppi
 pybo.policies.gpopt.gpucb
 pybo.policies.gpopt.thompson
+pybo.policies.gpopt.gpentropy
 pybo.policies.gpopt
 pybo.policies
 pybo
