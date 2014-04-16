@@ -19,7 +19,7 @@ from ._escov import get_cov
 __all__ = []
 
 
-def run_ep(mu, Sigma, ymin, sn2):
+def run_ep_iteration(mu, Sigma, ymin, sn2):
     # XXX: compute the inverse. first off: can we avoid calling this? second: if
     # we really do need to call this then we should be using dpotri (or a scipy
     # call to that LAPACK function).
@@ -98,38 +98,47 @@ def run_ep(mu, Sigma, ymin, sn2):
     return mHat, vHat
 
 
-def condition(Ka, Kb, Kba, b):
+def run_ep(X, y, xstar, ell, sf2, sn2):
+    # make sure our input array is in fortran order so that we can pass it to
+    # Miguel's get_cov method.
+    X = np.asfortranarray(X)
+    d = X.shape[1]
+
+    # our "observations". first we have the actual observations y, and then the
+    # equality constraints of zero for the gradient and the non-diagonal
+    # elements of the Hessian evaluated at xstar.
+    b = np.r_[y, np.zeros(d + d*(d-1)/2)]
+    c = len(b)
+
+    # get the full covariance between the inputs as well as the gradient and
+    # Hessian evaluated at xstar. This is blocked such that our constraints
+    # (i.e. b) are the first diagonal block and a is the second.
+    K = get_cov(X, xstar, ell, sf2, sn2)
+    Ka = K[c:, c:]
+    Kb = K[:c, :c]
+    Kba = K[:c, c:]
+
+    # FIXME: document get_cov better. Also just by naming convention wouldn't it
+    # make more sense if a was the first block?
+
     # these temporaries are just the cholesky of the covariance of b and the
     # forward-solve of this with Kba which we can use to do the conditioning.
     R = sla.cholesky(Kb)
     V = sla.solve_triangular(R, Kba, trans=True)
 
-    # get the posterior over a by conditioning on b.
+    # This then results in mu and Sigma being the Gaussian prior we'll hand off
+    # to EP.
     mu = np.dot(V.T, sla.solve_triangular(R, b, trans=True))
     Sigma = Ka - np.dot(V.T, V)
 
-    return mu, Sigma
+    # run EP to get approximate factors for a and update the factors so we can
+    # apply them to the full joint.
+    m, v = run_ep_iteration(mu, Sigma, min(y), sn2)
+    m = np.r_[b, m]
+    v = np.r_[np.zeros_like(b), v]
 
+    # NOTE: this replaces the earlier computed cholesky.
+    R = sla.cholesky(K + np.diag(v))
+    alpha = sla.solve_triangular(R, m, trans=True)
 
-def run(X, y, xstar, ell, sf2, sn2):
-    X = np.asfortranarray(X)
-    n = X.shape[0]
-    d = X.shape[1]
-    m = n + d + d * (d - 1) / 2
-
-    # get the covariance matrix between X and the relevant components, and break
-    # it into blocks so we can condition.
-    K = get_cov(X, xstar, ell, sf2, sn2)
-    Ka = K[m:, m:]
-    Kb = K[:m, :m]
-    Kba = K[:m, m:]
-
-    # our "observations".
-    b = np.r_[y, np.zeros(m-n)]
-
-    # first get the "prior" mean and covariance by simple conditioning of our
-    # Gaussian observations.
-    mu, Sigma = condition(Ka, Kb, Kba, b)
-
-    # now run EP to incorporate the non-Gaussian observations.
-    run_ep(mu, Sigma, min(y), sn2)
+    return R, alpha

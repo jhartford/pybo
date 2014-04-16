@@ -31,11 +31,13 @@ if __name__ == '__main__':
     xmax = model.bounds[0,1]
     x = np.linspace(xmin, xmax, 200)
 
-    gpentropy.run(X, y, xstar, ell, sf**2, sn**2)
+    gpentropy.run_ep(X, y, xstar, ell, sf**2, sn**2)
 
     pl.gcf()
     pl.cla()
     pygp.gpplot(gp, xmin, xmax, draw=False)
-    pl.plot(x, model.f(x[:, None]), 'r-')
+    pl.plot(x, model.f(x[:, None]), 'g-', lw=2)
+    pl.axvline(xstar, color='r')
     pl.axis('tight')
+    pl.axis(xmin=xmin, xmax=xmax)
     pl.draw()

@@ -6,10 +6,10 @@ import pybo.models as pbm
 import pybo.policies as pbp
 
 
-def run_model(Model, sn, ell, sf, T):
-    model = Model(0.2)
+def run_model(Policy, Model, sn, ell, sf, T):
+    model = Model(sn)
     gp = pg.BasicGP(sn, ell, sf)
-    policy = pbp.Thompson(gp, model.bounds)
+    policy = Policy(gp, model.bounds)
 
     xmin = model.bounds[0,0]
     xmax = model.bounds[0,1]
@@ -31,5 +31,4 @@ def run_model(Model, sn, ell, sf, T):
 
 
 if __name__ == '__main__':
-    # run_model(pbm.Sinusoidal, 0.2, 0.70, 1.25, 100)
-    run_model(pbm.Gramacy, 0.2, 0.05, 1.25, 100)
+    run_model(pbp.Thompson, pbm.Gramacy, 0.2, 0.05, 1.25, 100)
