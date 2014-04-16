@@ -31,7 +31,9 @@ if __name__ == '__main__':
     xmax = model.bounds[0,1]
     x = np.linspace(xmin, xmax, 200)
 
-    gpentropy.run_ep(X, y, xstar, ell, sf**2, sn**2)
+    R, alpha = gpentropy.run_ep(X, y, xstar, ell, sf**2, sn**2)
+    print R
+    print alpha
 
     pl.gcf()
     pl.cla()

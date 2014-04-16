@@ -29,50 +29,48 @@ def run_ep_iteration(mu, Sigma, ymin, sn2):
 
     # the marginal approximation to our posterior given the current approximate
     # factors.
-    v = Sigma.diagonal().copy()
-    m = mu.copy()
+    tau = 1 / Sigma.diagonal()
+    rho = mu / Sigma.diagonal()
 
     # the current approximate factors.
-    vHat = np.ones_like(v) * np.inf
-    mHat = np.zeros_like(m)
+    tauHat = np.zeros_like(tau)
+    rhoHat = np.zeros_like(rho)
 
     # we won't do any damping at first.
     damping = 1
 
     while True:
         # eliminate the contribution of the approximate factor.
-        vOld = (v**-1 - vHat**-1) ** -1
-        mOld = vOld * (m/v - mHat/vHat)
-        negv = (vOld < 0)
+        v = (tau - tauHat) ** -1
+        m = v * (rho - rhoHat)
 
-        # introduce aux versions of m and v because the updates are *almost* the
-        # same for the two parts if we do this transformation first.
-        vAux = vOld.copy(); vAux[-1] = vOld[-1] + sn2
-        mAux = mOld.copy(); mAux[-1] = ymin - mOld[-1]
-        sAux = np.sqrt(vAux)
+        s = np.sqrt(v);      s[-1] = np.sqrt(v[-1] + sn2)
+        t = m.copy();        t[-1] = ymin - m[-1]
+        u = np.ones_like(t); u[-1] = -1
 
-        alpha = mAux / sAux
+        alpha = t / s
         ratio = np.exp(ss.norm.logpdf(alpha) - ss.norm.logcdf(alpha))
-        beta = ratio * (alpha + ratio) / vAux
+        beta = ratio * (alpha + ratio) / s / s
+        kappa = u * (t / s + ratio) / s
 
-        # note that for the evaluation part the kappa gets flipped as well.
-        kappa = (mAux / sAux + ratio) / sAux
-        kappa[-1] *= -1
-
-        vHatNew = 1 / beta - vOld
-        mHatNew = mOld + 1 / kappa
+        tauHatNew = beta / (1 - beta*v)
+        tauHatNew[np.abs(tauHatNew) < 1e-300] = 1e-300
+        rhoHatNew = (m + 1 / kappa) * tauHatNew
 
         # don't change anything that ends up with a negative variance.
-        vHatNew[negv] = vHat[negv]
-        mHatNew[negv] = mHat[negv]
+        negv = (v < 0)
+        tauHatNew[negv] = tauHat[negv]
+        rhoHatNew[negv] = rhoHat[negv]
 
         while True:
-            mHatNew = mHatNew / vHatNew * damping + mHat / vHat * (1 - damping)
-            vHatNew = 1 / (1 / vHatNew * damping + 1 / vHat * (1 - damping))
-            mHatNew = vHatNew * mHatNew
+            # mix between the new factors and the old ones. NOTE: in the first
+            # iteration damping is 1, so this doesn't do any damping.
+            tauHatNew = tauHatNew * damping + tauHat * (1-damping)
+            rhoHatNew = rhoHatNew * damping + rhoHat * (1-damping)
 
-            # XXX: this seems expensive. anything better?
-            vals, _ = np.linalg.eig(np.diag(vHatNew**-1) + SigmaInverse)
+            # get the eigenvalues of the new posterior covariance and mix more
+            # with the old approximation if they're blowing up.
+            vals, _ = np.linalg.eig(np.diag(tauHatNew) + SigmaInverse)
 
             if any(1/vals <= 1e-10):
                 damping *= 0.5
@@ -80,20 +78,22 @@ def run_ep_iteration(mu, Sigma, ymin, sn2):
                 break
 
         # our new approximate factors.
-        vHat = vHatNew
-        mHat = mHatNew
+        tauHat = tauHatNew
+        rhoHat = rhoHatNew
 
-        # the new posterior marginals.
-        VNew = sla.cho_solve(sla.cho_factor(np.diag(vHat**-1) + SigmaInverse), np.eye(Sigma.shape[0]))
-        mNew = np.dot(VNew, mHat / vHat + muSigma)
-        vNew = VNew.diagonal().copy()
+        # the new posterior.
+        V = sla.cho_solve(sla.cho_factor(np.diag(tauHat) + SigmaInverse), np.eye(Sigma.shape[0]))
+        m = np.dot(V, rhoHat + muSigma)
 
-        if np.max(np.abs(np.r_[m-mNew, v-vNew])) >= 1e-6:
+        if np.max(np.abs(np.r_[V.diagonal() - 1/tau, m - rho/tau])) >= 1e-6:
+            tau = 1 / V.diagonal()
+            rho = m / V.diagonal()
             damping *= 0.99
-            v = vNew
-            m = mNew
         else:
             break
+
+    vHat = 1 / tauHat
+    mHat = rhoHat / tauHat
 
     return mHat, vHat
 
