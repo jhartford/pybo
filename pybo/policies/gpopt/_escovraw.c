@@ -221,7 +221,7 @@ void computeCovDataPointsDiagHessian(double *ret, double *X, int n, int nrow, in
 
 void computeCovDataPointsMinimum(double *ret, double *X, int n, int nrow, int d, double *l, double sigma, double *m) {
 
-	int i, j, k, h, counter;
+	int i, k;
 
 	/* We allocate memory to store the data points */
 
@@ -334,7 +334,7 @@ void computeCovNonDiagHessianNonDiagHessian(double *ret, int n, int nrow, int d,
 
 void computeCovNonDiagHessianDiagHessian(double *ret, int n, int nrow, int d, double *l, double sigma, double *m) {
 
-	int i, j, h, k, counter1;
+	int i, j, h, counter1;
 
 	counter1 = 0;
 	for (i = 0 ; i < d ; i++) {
@@ -354,7 +354,7 @@ void computeCovNonDiagHessianDiagHessian(double *ret, int n, int nrow, int d, do
 
 void computeCovNonDiagHessianMinimum(double *ret, int n, int nrow, int d, double *l, double sigma, double *m) {
 
-	int i, j, h, k, counter1;
+	int i, j, h, counter1;
 
 	counter1 = 0;
 	for (i = 0 ; i < d ; i++) {
@@ -391,7 +391,7 @@ void computeCovDiagHessianDiagHessian(double *ret, int n, int nrow, int d, doubl
 
 void computeCovDiagHessianMinimum(double *ret, int n, int nrow, int d, double *l, double sigma, double *m) {
 
-	int i, j;
+	int i;
 
 	for (i = 0 ; i < d ; i++) {
 		ret[ (n + d + d * (d - 1) / 2 + i) + (n + d + d * (d - 1) / 2 + d) * nrow ] = d2covdxjkxjl(m, m, sigma, l, d, i, i);
@@ -536,7 +536,7 @@ void computeCovXstarDiagHessian(double *ret, double *Xstar, int nXstar, double *
 
 void computeCovXstarMinimum(double *ret, double *Xstar, int nXstar, double *X, int n, int nrow, int d, double *l, double sigma, double *m) {
 
-	int i, j, k, h, counter;
+	int i, k;
 
 	/* We allocate memory to store the data points */
 
@@ -632,3 +632,34 @@ void computeCovMatrix(double *ret, double *X, int n, int d, double *m,
 
 	computeMinimumMinimum(ret, n, nrow, d, l, sigma, sigma0, m);
 }
+
+
+void computeNewColumnCovMatrix(double *ret, double *X, int n, int d, double *m,
+                               double *l, double sigma, double sigma0,
+                               double *Xstar, int nXstar)
+{
+    int nrow = (n + d + d * (d - 1) / 2 + d + 1);
+
+    /********** WE COMPUTE THE COVARIANCES BETWEEN Xstar AND EVERYTHING ELSE **********/
+
+    /* We compute the covariances the n available observations */
+
+    computeCovXstarDataPoints(ret, Xstar, nXstar, X, n, nrow, d, l, sigma, sigma0);
+
+    /* We compute the covariances at the n available observations and the d gradient values at the minimum */
+
+    computeCovXstarGradient(ret, Xstar, nXstar, X, n, nrow, d, l, sigma, m);
+
+    /* We compute the covariances at the n available observations and the d * (d - 1) / 2 non diagonal entries of the hessian at the minimum */
+
+    computeCovXstarNonDiagHessian(ret, Xstar, nXstar, X, n, nrow, d, l, sigma, m);
+
+    /* We compute the covariances at the n available observations and the d diagonal entries of the hessian at the minimum */
+
+    computeCovXstarDiagHessian(ret, Xstar, nXstar, X, n, nrow, d, l, sigma, m);
+
+    /* We compute the covariances at the n available observations and the minimum */
+
+    computeCovXstarMinimum(ret, Xstar, nXstar, X, n, nrow, d, l, sigma, m);
+}
+

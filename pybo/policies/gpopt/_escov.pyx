@@ -21,6 +21,11 @@ cdef extern void computeCovMatrix(double *K, double *X, int n, int d,
                                   double *xstar, double *ell, double sf2,
                                   double sn2)
 
+cdef extern void computeNewColumnCovMatrix(double *ret, double *X, int n, int d,
+                                           double *xstar, double *ell,
+                                           double sf2, double sn2,
+                                           double *Xtest, int m)
+
 
 def get_cov(double[::1, :] X,
             double[:] xstar,
@@ -38,6 +43,30 @@ def get_cov(double[::1, :] X,
 
     # call the internal code.
     computeCovMatrix(&K[0,0], &X[0,0], n, d, &xstar[0], &ell[0], sf2, sn2)
+
+    # this just makes sure we get returned as an array rather than as a typed
+    # memory view.
+    return np.asarray(K)
+
+
+def get_crosscov(double[::1, :] Xtest,
+                 double[::1, :] X,
+                 double[:] xstar,
+                 double[:] ell,
+                 double sf2,
+                 double sn2):
+
+    # get the sizes we'll need
+    cdef int m = Xtest.shape[0]
+    cdef int n = X.shape[0]
+    cdef int d = X.shape[1]
+    cdef int r = n + d + int(d*(d-1)/2) + d + 1
+
+    # create the output array.
+    cdef double[::1, :] K = np.empty((m, r), order='F')
+
+    computeNewColumnCovMatrix(&K[0,0], &X[0,0], n, d, &xstar[0], &ell[0], sf2,
+                              sn2, &Xtest[0,0], m)
 
     # this just makes sure we get returned as an array rather than as a typed
     # memory view.
