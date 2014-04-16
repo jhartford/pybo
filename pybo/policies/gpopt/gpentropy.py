@@ -11,16 +11,13 @@ from __future__ import print_function
 import numpy as np
 import scipy.stats as ss
 import scipy.linalg as sla
+import scipy.spatial.distance as ssd
 
 # local imports
 from ._escov import get_cov, get_crosscov
 
 # exported symbols
 __all__ = []
-
-
-def cholinv(A):
-    return sla.cho_solve(sla.cho_factor(A), np.eye(A.shape[0]))
 
 
 def run_ep_iteration(mu, Sigma, ymin, sn2):
@@ -145,23 +142,50 @@ def run_ep(X, y, xstar, ell, sf2, sn2):
     R = sla.cholesky(K + np.diag(v))
     alpha = sla.solve_triangular(R, m, trans=True)
 
-    return R, alpha
+    Xstar = np.asfortranarray(xstar[:,None])
+    Kstar = get_crosscov(Xstar, X, xstar, ell, sf2, sn2)
+    Vstar = sla.solve_triangular(R, Kstar.T, trans=True)
+
+    mustar = float(np.dot(Vstar.T, alpha))
+    s2star = float(sf2 - np.sum(Vstar**2, axis=0))
+
+    return R, alpha, Vstar, mustar, s2star
+
+
+def seard(ell, sf2, X1, X2):
+    # XXX: gross! in order to keep this self-contained I'll just reimplement the
+    # SEARD kernel here. but ultimately all the cov computations should be moved
+    # into the kernel objects in a smart way.
+    return sf2 * np.exp(-0.5*ssd.cdist(X1/ell, X2/ell, 'sqeuclidean'))
 
 
 def predict_ep(Xtest, X, y, xstar, ell, sf2, sn2):
-    Xtest = np.asfortranarray(Xtest)
     X = np.asfortranarray(X)
+    Xstar = np.asfortranarray(xstar[:,None])
+    Xtest = np.asfortranarray(Xtest)
 
     # get the cholesky and weight terms.
-    R, alpha = run_ep(X, y, xstar, ell, sf2, sn2)
+    R, alpha, Vstar, mustar, s2star = run_ep(X, y, xstar, ell, sf2, sn2)
 
-    # get the cross-covariances between our test points and the points we
-    # trained on (and the additional constraints we imposed on the
-    # Hessian/gradient at xstar).
+    # get the kernel wrt our inputs and constraints
     Ktest = get_crosscov(Xtest, X, xstar, ell, sf2, sn2)
-    V = sla.solve_triangular(R, Ktest.T, trans=True)
+    Vtest = sla.solve_triangular(R, Ktest.T, trans=True)
 
-    mu = np.dot(V.T, alpha)
-    s2 = sf2 - np.sum(V**2, axis=0)
+    # compute the posterior on our test points without the constraint that
+    # f(xstar) < f(xtest_i).
+    mu = np.dot(Vtest.T, alpha)
+    s2 = sf2 - np.sum(Vtest**2, axis=0)
+
+    # the covariance between each test point and xstar.
+    rho = np.ravel(seard(ell, sf2, Xtest, Xstar) - np.dot(Vtest.T, Vstar))
+
+    m = mu - mustar
+    s = s2 + s2star - 2*rho
+    a = mu / np.sqrt(s)
+    b = np.exp(ss.norm.logpdf(a) - ss.norm.logcdf(a))
+
+    rho *= 1 - 1e-6
+    mu += b * (s2-rho) / s
+    s2 -= b * (b+a) * (s2-rho)**2 / s
 
     return mu, s2
