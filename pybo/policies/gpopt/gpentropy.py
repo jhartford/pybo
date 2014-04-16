@@ -13,10 +13,14 @@ import scipy.stats as ss
 import scipy.linalg as sla
 
 # local imports
-from ._escov import get_cov
+from ._escov import get_cov, get_crosscov
 
 # exported symbols
 __all__ = []
+
+
+def cholinv(A):
+    return sla.cho_solve(sla.cho_factor(A), np.eye(A.shape[0]))
 
 
 def run_ep_iteration(mu, Sigma, ymin, sn2):
@@ -142,3 +146,22 @@ def run_ep(X, y, xstar, ell, sf2, sn2):
     alpha = sla.solve_triangular(R, m, trans=True)
 
     return R, alpha
+
+
+def predict_ep(Xtest, X, y, xstar, ell, sf2, sn2):
+    Xtest = np.asfortranarray(Xtest)
+    X = np.asfortranarray(X)
+
+    # get the cholesky and weight terms.
+    R, alpha = run_ep(X, y, xstar, ell, sf2, sn2)
+
+    # get the cross-covariances between our test points and the points we
+    # trained on (and the additional constraints we imposed on the
+    # Hessian/gradient at xstar).
+    Ktest = get_crosscov(Xtest, X, xstar, ell, sf2, sn2)
+    V = sla.solve_triangular(R, Ktest.T, trans=True)
+
+    mu = np.dot(V.T, alpha)
+    s2 = sf2 - np.sum(V**2, axis=0)
+
+    return mu, s2
