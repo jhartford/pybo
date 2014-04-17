@@ -177,15 +177,14 @@ def predict_ep(Xtest, X, y, xstar, ell, sf2, sn2):
     s2 = sf2 - np.sum(Vtest**2, axis=0)
 
     # the covariance between each test point and xstar.
-    # rho = np.ravel(seard(ell, sf2, Xtest, Xstar) - np.dot(Vtest.T, Vstar))
-    # rho *= 1 - 1e-6
+    rho = np.ravel(seard(ell, sf2, Xtest, Xstar) - np.dot(Vtest.T, Vstar))
+    rho *= 1 - 1e-4
 
-    # m = mu - mustar
-    # s = s2 + s2star - 2*rho
-    # a = mu / np.sqrt(s)
-    # b = np.exp(ss.norm.logpdf(a) - ss.norm.logcdf(a))
+    s = s2 + s2star - 2*rho
+    a = (mu - mustar) / np.sqrt(s)
+    b = np.exp(ss.norm.logpdf(a) - ss.norm.logcdf(a))
 
-    # mu += b * (s2-rho) / s
-    # s2 -= b * (b+a) * (s2-rho)**2 / s
+    mu += b * (s2-rho) / np.sqrt(s)
+    s2 -= b * (b+a) * (s2-rho)**2 / s
 
     return mu, s2

@@ -23,7 +23,7 @@ if __name__ == '__main__':
     y = model.get_all(X)
     gp.add_data(X, y)
 
-    xstar = np.array([2.])
+    xstar = np.array([2.0])
     ell = np.array([ell])
 
     # get some points for plotting.
@@ -59,5 +59,5 @@ if __name__ == '__main__':
     pl.axvline(xstar, color='r')
     pl.title('marginal posterior conditioned on the marked minimum')
     pl.axis('tight')
-    pl.axis(xmin=xmin, xmax=xmax)
+    pl.axis(axis)
     pl.draw()
