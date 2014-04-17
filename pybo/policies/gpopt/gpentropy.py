@@ -21,15 +21,8 @@ __all__ = []
 
 
 def run_ep_iteration(mu, Sigma, ymin, sn2):
-    # XXX: compute the inverse. first off: can we avoid calling this? second: if
-    # we really do need to call this then we should be using dpotri (or a scipy
-    # call to that LAPACK function).
-    SigmaFactor = sla.cho_factor(Sigma)
-    SigmaInverse = sla.cho_solve(SigmaFactor, np.eye(Sigma.shape[0]))
-    muSigma = sla.cho_solve(SigmaFactor, mu)
-
-    # the marginal approximation to our posterior given the current approximate
-    # factors.
+    # initial marginal approximation to our posterior given the zeroed factors
+    # given below. note we're working with the "natural" parameters.
     tau = 1 / Sigma.diagonal()
     rho = mu / Sigma.diagonal()
 
@@ -71,7 +64,7 @@ def run_ep_iteration(mu, Sigma, ymin, sn2):
 
             # get the eigenvalues of the new posterior covariance and mix more
             # with the old approximation if they're blowing up.
-            vals, _ = np.linalg.eig(np.diag(tauHatNew) + SigmaInverse)
+            vals, _ = np.linalg.eig(np.diag(1/tauHatNew) + Sigma)
 
             if any(1/vals <= 1e-10):
                 damping *= 0.5
@@ -83,8 +76,10 @@ def run_ep_iteration(mu, Sigma, ymin, sn2):
         rhoHat = rhoHatNew
 
         # the new posterior.
-        V = sla.cho_solve(sla.cho_factor(np.diag(tauHat) + SigmaInverse), np.eye(Sigma.shape[0]))
-        m = np.dot(V, rhoHat + muSigma)
+        R = sla.cholesky(Sigma + np.diag(1/tauHat))
+        V = sla.solve_triangular(R, Sigma, trans=True)
+        V = Sigma - np.dot(V.T, V)
+        m = np.dot(V, rhoHat) + sla.cho_solve((R, False), mu) / tauHat
 
         if np.max(np.abs(np.r_[V.diagonal() - 1/tau, m - rho/tau])) >= 1e-6:
             tau = 1 / V.diagonal()

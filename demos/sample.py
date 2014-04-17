@@ -19,11 +19,11 @@ if __name__ == '__main__':
     model = pybo.models.GPModel(gp, [0, 10], sigma=sn, rng=0)
 
     np.random.seed(0)
-    X = ldsample.random(model.bounds, 5)
+    X = ldsample.random(model.bounds, 50)
     y = model.get_all(X)
     gp.add_data(X, y)
 
-    xstar = np.array([2.0])
+    xstar = np.array([2.])
     ell = np.array([ell])
 
     # get some points for plotting.
