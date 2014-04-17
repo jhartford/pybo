@@ -114,7 +114,7 @@ def run_ep(X, y, xstar, ell, sf2, sn2):
     # get the full covariance between the inputs as well as the gradient and
     # Hessian evaluated at xstar. This is blocked such that our constraints
     # (i.e. b) are the first diagonal block and a is the second.
-    K = get_cov(X, xstar, ell, sf2, sn2)
+    K = get_cov(X, xstar, 1/ell**2, sf2, sn2)
     Ka = K[c:, c:]
     Kb = K[:c, :c]
     Kba = K[:c, c:]
@@ -143,7 +143,7 @@ def run_ep(X, y, xstar, ell, sf2, sn2):
     alpha = sla.solve_triangular(R, m, trans=True)
 
     Xstar = np.asfortranarray(xstar[:,None])
-    Kstar = get_crosscov(Xstar, X, xstar, ell, sf2, sn2)
+    Kstar = get_crosscov(Xstar, X, xstar, 1/ell**2, sf2, sn2)
     Vstar = sla.solve_triangular(R, Kstar.T, trans=True)
 
     mustar = float(np.dot(Vstar.T, alpha))
@@ -168,7 +168,7 @@ def predict_ep(Xtest, X, y, xstar, ell, sf2, sn2):
     R, alpha, Vstar, mustar, s2star = run_ep(X, y, xstar, ell, sf2, sn2)
 
     # get the kernel wrt our inputs and constraints
-    Ktest = get_crosscov(Xtest, X, xstar, ell, sf2, sn2)
+    Ktest = get_crosscov(Xtest, X, xstar, 1/ell**2, sf2, sn2)
     Vtest = sla.solve_triangular(R, Ktest.T, trans=True)
 
     # compute the posterior on our test points without the constraint that
@@ -177,15 +177,15 @@ def predict_ep(Xtest, X, y, xstar, ell, sf2, sn2):
     s2 = sf2 - np.sum(Vtest**2, axis=0)
 
     # the covariance between each test point and xstar.
-    rho = np.ravel(seard(ell, sf2, Xtest, Xstar) - np.dot(Vtest.T, Vstar))
+    # rho = np.ravel(seard(ell, sf2, Xtest, Xstar) - np.dot(Vtest.T, Vstar))
+    # rho *= 1 - 1e-6
 
-    m = mu - mustar
-    s = s2 + s2star - 2*rho
-    a = mu / np.sqrt(s)
-    b = np.exp(ss.norm.logpdf(a) - ss.norm.logcdf(a))
+    # m = mu - mustar
+    # s = s2 + s2star - 2*rho
+    # a = mu / np.sqrt(s)
+    # b = np.exp(ss.norm.logpdf(a) - ss.norm.logcdf(a))
 
-    rho *= 1 - 1e-6
-    mu += b * (s2-rho) / s
-    s2 -= b * (b+a) * (s2-rho)**2 / s
+    # mu += b * (s2-rho) / s
+    # s2 -= b * (b+a) * (s2-rho)**2 / s
 
     return mu, s2

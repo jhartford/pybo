@@ -59,5 +59,5 @@ if __name__ == '__main__':
     pl.axvline(xstar, color='r')
     pl.title('marginal posterior conditioned on the marked minimum')
     pl.axis('tight')
-    pl.axis(axis)
+    pl.axis(xmin=xmin, xmax=xmax)
     pl.draw()
