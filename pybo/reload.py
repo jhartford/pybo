@@ -4,7 +4,7 @@
 # package this will import and reload all of them.
 
 fnames = """
-pybo.utils.ldsample
+pybo.utils.random
 pybo.utils
 pybo.models.gps
 pybo.models.functions

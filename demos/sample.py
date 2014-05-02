@@ -3,7 +3,7 @@ import matplotlib.pyplot as pl
 
 import pygp
 import pybo.models
-import pybo.utils.ldsample as ldsample
+import pybo.utils.random as random
 import pybo.policies.gpopt.gpentropy as gpentropy
 
 
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     model = pybo.models.GPModel(gp, [0, 10], sigma=sn, rng=0)
 
     np.random.seed(0)
-    X = ldsample.random(model.bounds, 50)
+    X = random.lhsample(model.bounds, 10)
     y = model.get_all(X)
     gp.add_data(X, y)
 
