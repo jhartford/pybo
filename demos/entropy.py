@@ -3,6 +3,7 @@ import matplotlib.pyplot as pl
 
 import pygp
 import pybo.solvers.policies.entropy as entropy
+import pybo.solvers.policies.entropy2 as entropy2
 
 
 if __name__ == '__main__':
@@ -29,6 +30,12 @@ if __name__ == '__main__':
     mu, s2 = entropy.predict(gp, z, Xtest)
     er = 2*np.sqrt(s2)
 
+    muo, s2o = entropy2.predict_ep(Xtest, gp._X, gp._y, z,
+                                   np.exp(gp._kernel._logell),
+                                   np.exp(gp._kernel._logsf*2),
+                                   gp._likelihood.s2)
+    ero = 2*np.sqrt(s2o)
+
     pl.figure(1)
     pl.clf()
 
@@ -39,6 +46,10 @@ if __name__ == '__main__':
     color = next(pl.gca()._get_lines.color_cycle)
     pl.plot(xx, mu, color=color, lw=2, label='posterior')
     pl.fill_between(xx, mu+er, mu-er, color=color, alpha=0.15)
+
+    color = next(pl.gca()._get_lines.color_cycle)
+    pl.plot(xx, muo, color=color, lw=2, label='posterior old')
+    pl.fill_between(xx, muo+ero, muo-ero, color=color, alpha=0.15)
 
     pl.scatter(X, y, label='data', marker='o', facecolors='none', s=30, lw=1,
                color='k', zorder=3)
