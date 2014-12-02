@@ -75,11 +75,15 @@ def get_components(init, policy, solver, recommender, rng):
             raise ValueError('unknown parameters for component %r: %r' %
                              (key, list(kwarg_set - valid_set)))
 
-        if 'rng' in inspect.getargspec(func).args:
-            kwargs['rng'] = rng
-
-        if len(kwargs) > 0:
-            func = functools.partial(func, **kwargs)
+        if inspect.isclass(func):
+            if 'rng' in inspect.getargspec(func.__init__).args:
+                kwargs['rng'] = rng
+            func = func(**kwargs)
+        else:
+            if 'rng' in inspect.getargspec(func).args:
+                kwargs['rng'] = rng
+            if len(kwargs) > 0:
+                func = functools.partial(func, **kwargs)
 
         return func
 
@@ -194,7 +198,7 @@ def solve_bayesopt(f,
     for i in xrange(model.ndata, T):
         # get the next point to evaluate.
         index = policy(model)
-        x, _ = solver(index, bounds)
+        x, _ = solver(index, bounds, model.data)
 
         # deal with any visualization.
         if callback is not None:

@@ -23,7 +23,7 @@ def params(*args):
         """
         Internal decorator to perform the annotation.
         """
-        spec = inspect.getargspec(f)
+        spec = inspect.getargspec(f.__init__ if inspect.isclass(f) else f)
         params_valid = set(spec.args[::-1][:len(spec.defaults)])
         params = set(args)
 

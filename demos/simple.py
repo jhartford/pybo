@@ -74,6 +74,7 @@ if __name__ == '__main__':
                                T=T,
                                policy='ei',
                                init='latin',
+                               solver='spray',
                                recommender='incumbent',
                                noisefree=True,
                                rng=rng,
