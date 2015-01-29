@@ -39,9 +39,8 @@ def EI(model, xi=0.0):
     """
     Expected improvement policy with an exploration parameter of `xi`.
     """
-    X, _ = model.data
-    f, _ = model.posterior(X)
-    target = f.max() + xi
+    _, y = model.data
+    target = y.max() + xi
 
     # define the index wrt a single model (that should act like a GP model, ie
     # in that it is marginally Gaussian and defines the posterior method).
