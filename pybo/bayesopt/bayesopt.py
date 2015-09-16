@@ -15,6 +15,9 @@ import pygp
 import inspect
 import functools
 
+# find a better spot for this...
+from scipy.optimize import minimize
+
 # update a recarray at the end of solve_bayesopt.
 from numpy.lib.recfunctions import append_fields
 from mwhutils.random import rstate
@@ -93,6 +96,131 @@ def get_components(init, policy, solver, recommender, rng):
 
 def solve_bayesopt(objective,
                    bounds,
+                   grad,
+                   niter=100,
+                   init='middle',
+                   policy='ei',
+                   solver='lbfgs',
+                   recommender='latent',
+                   model=None,
+                   noisefree=False,
+                   ftrue=None,
+                   rng=None,
+                   callback=None,
+                   n_grad=20):
+    """
+    Maximize the given function using Bayesian Optimization.
+
+    Args:
+        objective: function handle representing the objective function.
+        bounds: bounds of the search space as a (d,2)-array.
+        niter: horizon for optimization.
+        init: the initialization component.
+        policy: the acquisition component.
+        solver: the inner-loop solver component.
+        recommender: the recommendation component.
+        model: the Bayesian model instantiation.
+        noisefree: a boolean denoting that the model is noisefree; this only
+                   applies if a default model is used (ie. it is ignored if the
+                   model argument is used).
+        ftrue: a ground-truth function (for evaluation).
+        rng: either an RandomState object or an integer used to seed the state;
+             this will be fed to each component that requests randomness.
+        callback: a function to call on each iteration for visualization.
+
+    Note that the modular way in which this function has been written allows
+    one to also pass parameters directly to some of the components. This works
+    for the `init`, `policy`, `solver`, and `recommender` inputs. These
+    components can be passed as either a string, a function, or a 2-tuple where
+    the first item is a string/function and the second is a dictionary of
+    additional arguments to pass to the component.
+
+    Returns:
+        A numpy record array containing a trace of the optimization process.
+        The fields of this array are `x`, `y`, and `xbest` corresponding to the
+        query locations, outputs, and recommendations at each iteration. If
+        ground-truth is known an additional field `fbest` will be included.
+    """
+        # make sure the bounds are a 2d-array.
+    bounds = np.array(bounds, dtype=float, ndmin=2)
+
+    # see if the query object itself defines ground truth.
+    if (ftrue is None) and hasattr(objective, 'get_f'):
+        ftrue = objective.get_f
+
+    # initialize the random number generator.
+    rng = rstate(rng)
+
+    # get the model components.
+    init, policy, solver, recommender = \
+        get_components(init, policy, solver, recommender, rng)
+
+    # create a list of initial points to query.
+    X = init(bounds)
+    Y = [objective(x) for x in X]
+
+    if model is None:
+        # initialize parameters of a simple GP model.
+        sf = np.std(Y) if (len(Y) > 1) else 10.
+        mu = np.mean(Y)
+        ell = bounds[:, 1] - bounds[:, 0]
+
+        # FIXME: this may not be a great setting for the noise parameter
+        sn = 1e-5 if noisefree else 1e-3
+
+        # specify a hyperprior for the GP.
+        prior = {
+            'sn': (
+                None if noisefree else
+                pygp.priors.Horseshoe(scale=0.1, min=1e-5)),
+            'sf': pygp.priors.LogNormal(mu=np.log(sf), sigma=1., min=1e-6),
+            'ell': pygp.priors.Uniform(ell / 100, ell * 2),
+            'mu': pygp.priors.Gaussian(mu, sf)}
+
+        # create the GP model (with hyperprior).
+        model = pygp.BasicGP(sn, sf, ell, mu, kernel='matern5')
+        model = pygp.meta.MCMC(model, prior, n=10, burn=100, rng=rng)
+
+    # add any initial data to our model.
+    model.add_data(X, Y)
+
+    # allocate a datastructure containing "convergence" info.
+    info = np.zeros(niter, [('x', np.float, (len(bounds),)),
+                        ('y', np.float),
+                        ('xbest', np.float, (len(bounds),))])
+
+    # initialize the data.
+    info['x'][:len(X)] = X
+    info['y'][:len(Y)] = Y
+    info['xbest'][:len(Y)] = [X[np.argmax(Y[:i+1])] for i in xrange(len(Y))]
+
+    for i in xrange(model.ndata, niter):
+        # get the next point to evaluate.
+        index = policy(model)
+        x, _ = solver(index, bounds)
+
+        # deal with any visualization.
+        if callback is not None:
+            callback(model, bounds, info[:i], x, index, ftrue)
+
+        # make an observation and record it.
+        y = objective(x)
+        model.add_data(x, y)
+
+        # record everything.
+        info[i] = (x, y, recommender(model, bounds))
+
+    if ftrue is not None:
+        fbest = ftrue(info['xbest'])
+        info = append_fields(info, 'fbest', fbest, usemask=False)
+
+    return info
+
+
+### THE HYPEROPT META SOLVER ##################################################
+
+def solve_hyperopt(objective,
+                   bounds,
                    niter=100,
                    init='middle',
                    policy='ei',
@@ -154,28 +282,6 @@ def solve_bayesopt(objective,
     X = init(bounds)
     Y = [objective(x) for x in X]
 
-    if model is None:
-        # initialize parameters of a simple GP model.
-        sf = np.std(Y) if (len(Y) > 1) else 10.
-        mu = np.mean(Y)
-        ell = bounds[:, 1] - bounds[:, 0]
-
-        # FIXME: this may not be a great setting for the noise parameter
-        sn = 1e-5 if noisefree else 1e-3
-
-        # specify a hyperprior for the GP.
-        prior = {
-            'sn': (
-                None if noisefree else
-                pygp.priors.Horseshoe(scale=0.1, min=1e-5)),
-            'sf': pygp.priors.LogNormal(mu=np.log(sf), sigma=1., min=1e-6),
-            'ell': pygp.priors.Uniform(ell / 100, ell * 2),
-            'mu': pygp.priors.Gaussian(mu, sf)}
-
-        # create the GP model (with hyperprior).
-        model = pygp.BasicGP(sn, sf, ell, mu, kernel='matern5')
-        model = pygp.meta.MCMC(model, prior, n=10, burn=100, rng=rng)
-
     # add any initial data to our model.
     model.add_data(X, Y)
 
@@ -189,7 +295,20 @@ def solve_bayesopt(objective,
     info['y'][:len(Y)] = Y
     info['xbest'][:len(Y)] = [X[np.argmax(Y[:i+1])] for i in xrange(len(Y))]
 
-    for i in xrange(model.ndata, niter):
+    # BFGS callback
+    X_y = ([], [])
+    def callbackF(Xi):
+        global X_y
+        X_y[0].append(Xi)
+        X_y[1].append(objective(Xi))
+
+    for i in xrange(niter):
+        # take n_grad gradient steps
+        res = minimize(objective, x0, method='BFGS',
+                   jac=grad,
+                   options={'gtol': 1e-6, 'disp': True, 'maxiter': n_grad},
+                   callback=callbackF)
+
         # get the next point to evaluate.
         index = policy(model)
         x, _ = solver(index, bounds)
